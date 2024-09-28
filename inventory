@@ -1,0 +1,9 @@
+[freecodecamp]
+jenkins ansible_host=192.168.240.20
+webapp ansible_host=192.168.240.21
+
+[freecodecamp:vars]
+ansible_user=karim
+ansible_ssh_pass=karim
+ansible_become=true
+ansible_become_pass=karim

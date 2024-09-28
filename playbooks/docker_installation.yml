@@ -1,0 +1,90 @@
+---
+- hosts: freecodecamp
+  tasks:
+    - name: Start nftables service
+      become: true
+      service:
+        name: nftables
+        state: restarted
+
+    - name: Update the APT package index
+      become: true
+      apt:
+        update_cache: yes
+
+    - name: Install ca-certificates and curl
+      become: true
+      apt:
+        name:
+          - ca-certificates
+          - curl
+        state: present
+
+    - name: Create /etc/apt/keyrings directory
+      become: true
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Download Docker's official GPG key
+      become: true
+      get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+        mode: '0644'
+
+    - name: Add Docker repository to Apt sources
+      become: true
+      shell: |
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian $(. /etc/os-release && echo \"$VERSION_CODENAME\") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    - name: Update the APT package index after adding Docker repo
+      become: true
+      apt:
+        update_cache: yes
+
+    - name: Install Docker packages
+      become: true
+      apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Create docker group if it doesn't exist
+      become: true
+      group:
+        name: docker
+        state: present
+
+    - name: Add user to docker group
+      become: true
+      user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+
+    - name: Reboot the machine
+      become: true
+      reboot:
+
+    - name: Run a Docker command
+      command: docker run hello-world
+
+    - name: Change owner of directory /opt
+      file:
+        path: /opt
+        state: directory
+        recurse: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+
+    - name: Create docker directory
+      file:
+        path: /opt/docker
+        state: directory
+        mode: '0755'

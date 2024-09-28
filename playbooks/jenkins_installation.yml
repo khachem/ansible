@@ -1,0 +1,70 @@
+---
+- hosts: jenkins
+  tasks:
+    - name: Create Dockerfile for Jenkins
+      copy:
+        dest: /tmp/Dockerfile
+        content: |
+          FROM jenkins/jenkins:2.462.2-jdk17
+          USER root
+          RUN apt-get update && apt-get install -y lsb-release
+          RUN curl -fsSLo /usr/share/keyrings/docker-archive-keyring.asc https://download.docker.com/linux/debian/gpg
+          RUN echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.asc] https://download.docker.com/linux/debian $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+          RUN apt-get update && apt-get install -y docker-ce-cli
+          USER jenkins
+          RUN jenkins-plugin-cli --plugins "blueocean docker-workflow"
+
+    - name: Create a network
+      docker_network:
+        name: jenkins
+
+    - name: Build Jenkins Docker image
+      command: docker build -t myjenkins-blueocean:2.462.2-1 /tmp/.
+
+    - name: Run Jenkins Blue Ocean container
+      docker_container:
+        name: jenkins-blueocean
+        image: myjenkins-blueocean:2.462.2-1
+        state: started
+        restart_policy: on-failure
+        detach: true
+        network_mode: jenkins
+        published_ports:
+          - "8080:8080"
+          - "50000:50000"
+        env:
+          DOCKER_HOST: "tcp://docker:2376"
+          DOCKER_CERT_PATH: "/certs/client"
+          DOCKER_TLS_VERIFY: "1"
+        volumes:
+          - "jenkins-data:/var/jenkins_home"
+          - "jenkins-docker-certs:/certs/client:ro"
+
+    - name: Créer une table
+      become: true
+      command: nft add table ip filter
+
+    - name: Créer une chaîne pour les paquets entrants
+      become: true
+      command: nft add chain ip filter input { type filter hook input priority 0; }
+
+    - name: Accepter le trafic sur le port 22
+      become: true
+      command: nft add rule ip filter input tcp dport 22 accept
+
+    - name: Accepter le trafic sur le port 22
+      become: true
+      command: nft add rule ip filter input tcp dport 8080 accept
+
+    - name: Accepter le trafic existant
+      become: true
+      command: nft add rule ip filter input ct state established,related accept
+
+    - name: Rejeter tout le reste
+      become: true
+      command: nft add rule ip filter input drop
+
+    - name: Enregistrer conf nftables
+      become: true
+      command: nft list ruleset > /etc/nftables.conf
+
